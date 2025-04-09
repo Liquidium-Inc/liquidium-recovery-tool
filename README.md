@@ -4,6 +4,8 @@
 
 **No license required**: This project is fully open-source, free to use, fork, or adapt by anyone.
 
+**Legal Notice**: The Liquidium Vault Recovery Tool is provided as a free and open-source utility for community use. It is offered as-is, without any warranty—express or implied—including but not limited to warranties of merchantability or fitness for a particular purpose. Use at your own risk. The Liquidium team assumes no liability for loss, damage, or other issues arising from the use of this tool.
+
 **Live Site**: (https://liquidium-inc.github.io/liquidium-recovery-tool/)
 
 ## Overview
