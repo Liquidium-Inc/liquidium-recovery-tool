@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, ReactNode, useCallback } from 'react';
 import { WalletConnectionState, WalletType } from '../lib/types';
 import { createWalletAdapter, WalletAdapter } from '../lib/walletAdapters';
+import { isValidBitcoinAddress, isValidPublicKey } from '../lib/bitcoinConfig';
 
 // Define the context type for wallet state
 interface WalletContextType {
@@ -52,6 +53,15 @@ export const WalletProvider = ({ children }: WalletProviderProps) => {
       
       // Connect to the wallet
       const { address, publicKey } = await adapter.connect();
+
+      // The key goes into the vault's multisig script and the address receives the funds,
+      // so refuse a connection that does not give a usable mainnet address and compressed key.
+      if (!isValidBitcoinAddress(address)) {
+        throw new Error('Wallet did not return a Bitcoin mainnet address');
+      }
+      if (publicKey?.length !== 66 || !isValidPublicKey(publicKey)) {
+        throw new Error('Wallet did not return a valid public key');
+      }
 
       // Update the wallet state
       setWalletState({
