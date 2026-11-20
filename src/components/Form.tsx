@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, FormEvent } from "react";
+import { useState, useEffect, useRef, FormEvent } from "react";
 import { useWallet } from "./WalletProvider";
 import { FormData } from "../lib/types";
 import { fetchUTXOs, fetchFeeRates, broadcastTransaction } from "../lib/api";
@@ -11,6 +11,12 @@ import {
   NETWORK,
 } from "../lib/bitcoinConfig";
 import { Buffer } from "buffer";
+
+// Highest fee rate (sat/vB) accepted from the fee API as the default, and the
+// rate above which a manually entered fee needs explicit confirmation.
+const MAX_SANE_FEE_RATE = 500;
+// Share of the swept funds above which the fee needs explicit confirmation.
+const MAX_SANE_FEE_SHARE = 0.1;
 
 export const Form = () => {
   // Get wallet state and functions from the wallet provider
@@ -29,6 +35,8 @@ export const Form = () => {
   const [transactionId, setTransactionId] = useState<string | null>(null);
   const [mediumFeeRate, setMediumFeeRate] = useState<number | null>(null);
   const [isFetchingFeeRate, setIsFetchingFeeRate] = useState(false);
+  // Set once the user edits the fee rate, so a late API answer can't replace it
+  const feeRateEdited = useRef(false);
 
   // Validation errors
   const [validationErrors, setValidationErrors] = useState<
@@ -40,10 +48,21 @@ export const Form = () => {
     const getMediumFeeRate = async () => {
       setIsFetchingFeeRate(true);
       try {
-        const feeRates = await fetchFeeRates();
-        setMediumFeeRate(feeRates.hourFee);
+        const { hourFee } = await fetchFeeRates();
+        // Don't trust an implausible recommendation from the third-party API
+        if (
+          !Number.isFinite(hourFee) ||
+          hourFee < 1 ||
+          hourFee > MAX_SANE_FEE_RATE
+        ) {
+          throw new Error(`Implausible fee rate from API: ${hourFee}`);
+        }
+        const feeRate = Math.ceil(hourFee);
+        setMediumFeeRate(feeRate);
         // Update the form with the medium fee rate
-        setFormData((prev) => ({ ...prev, feeRate: feeRates.hourFee }));
+        if (!feeRateEdited.current) {
+          setFormData((prev) => ({ ...prev, feeRate }));
+        }
       } catch (error) {
         console.error("Error fetching fee rates:", error);
         setError("Failed to fetch fee rates. Using default value.");
@@ -58,6 +77,7 @@ export const Form = () => {
   // Handle form input changes
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
+    if (name === "feeRate") feeRateEdited.current = true;
     setFormData((prev) => ({
       ...prev,
       [name]: name === "feeRate" ? parseInt(value) || 0 : value,
@@ -176,6 +196,20 @@ export const Form = () => {
 
       // 8. Calculate final amount after deducting fee
       const finalAmount = totalAmount - fee;
+
+      // Ask before paying an unusually high fee
+      if (
+        (formData.feeRate > MAX_SANE_FEE_RATE ||
+          fee > totalAmount * MAX_SANE_FEE_SHARE) &&
+        !window.confirm(
+          `The network fee is unusually high: ${fee} sats ` +
+            `(${((fee / totalAmount) * 100).toFixed(1)}% of the vault's ` +
+            `${totalAmount} sats) at ${formData.feeRate} sat/vB. You will ` +
+            `receive ${finalAmount} sats. Continue?`,
+        )
+      ) {
+        throw new Error("Cancelled: fee is too high");
+      }
 
       // 9. Add output to send funds to user's wallet
       psbt.addOutput({
