@@ -44,15 +44,3 @@ export interface FormData {
   multisigAddress: string;
   feeRate: number;
 }
-
-// Structure for transaction response
-export interface TxResponse {
-  txid: string;
-  success: boolean;
-}
-
-// Structure for error response
-export interface ErrorResponse {
-  message: string;
-  details?: string;
-}

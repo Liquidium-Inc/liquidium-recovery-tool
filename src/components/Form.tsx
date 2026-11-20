@@ -209,11 +209,8 @@ export const Form = () => {
         const rawTx = signedPsbt.extractTransaction().toHex();
         console.log("Raw PBST Transaction:", rawTx);
 
-        // 15. Broadcast the transaction
-        const response = await broadcastTransaction(rawTx);
-
-        // 16. Set the transaction ID
-        setTransactionId(response.txid);
+        // 15. Broadcast the transaction and show its verified ID
+        setTransactionId(await broadcastTransaction(rawTx));
       } catch (signError) {
         console.error("Error during PSBT signing or processing:", signError);
         throw signError; // Re-throw to be caught by the outer try/catch
@@ -351,7 +348,11 @@ export const Form = () => {
       {/* Transaction Success */}
       {transactionId && (
         <div className="mt-4 p-4 bg-green-100 text-green-800 rounded-md">
-          <p className="font-semibold">Transaction Successfully Broadcast!</p>
+          <p className="font-semibold">Transaction accepted by mempool.space</p>
+          <p className="mt-1 text-sm">
+            Your funds are recovered once it confirms. Check that it shows up
+            in your wallet.
+          </p>
           <p className="mt-1 break-all">
             <a
               href={`https://mempool.space/tx/${transactionId}`}
