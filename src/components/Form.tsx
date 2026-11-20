@@ -17,6 +17,10 @@ import { Buffer } from "buffer";
 const MAX_SANE_FEE_RATE = 500;
 // Share of the swept funds above which the fee needs explicit confirmation.
 const MAX_SANE_FEE_SHARE = 0.1;
+// Rough virtual size (vB) of one vault input, used for the fee estimate
+const INPUT_VSIZE = 150;
+// Smallest output every wallet address type can relay (P2PKH dust limit)
+const DUST_LIMIT = 546;
 
 export const Form = () => {
   // Get wallet state and functions from the wallet provider
@@ -33,6 +37,7 @@ export const Form = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [transactionId, setTransactionId] = useState<string | null>(null);
+  const [skippedNotice, setSkippedNotice] = useState<string | null>(null);
   const [mediumFeeRate, setMediumFeeRate] = useState<number | null>(null);
   const [isFetchingFeeRate, setIsFetchingFeeRate] = useState(false);
   // Set once the user edits the fee rate, so a late API answer can't replace it
@@ -90,6 +95,7 @@ export const Form = () => {
 
     // Clear transaction ID and error when form changes
     setTransactionId(null);
+    setSkippedNotice(null);
     setError(null);
   };
 
@@ -130,6 +136,7 @@ export const Form = () => {
     // Clear previous errors and transaction ID
     setError(null);
     setTransactionId(null);
+    setSkippedNotice(null);
 
     // Validate form
     if (!validateForm()) {
@@ -147,10 +154,26 @@ export const Form = () => {
 
     try {
       // 1. Fetch UTXOs from the multisig address
-      const utxos = await fetchUTXOs(formData.multisigAddress);
+      const allUtxos = await fetchUTXOs(formData.multisigAddress);
 
-      if (!utxos || utxos.length === 0) {
+      if (!allUtxos || allUtxos.length === 0) {
         throw new Error("No UTXOs found for this multisig address");
+      }
+
+      // Leave out outputs worth no more than the fee to spend them. Anyone can
+      // send small outputs to the vault address, and sweeping them would only
+      // lower the amount recovered or push the fee above the vault's balance.
+      const inputFee = INPUT_VSIZE * formData.feeRate;
+      const utxos = allUtxos.filter((utxo) => utxo.value > inputFee);
+      const skipped = allUtxos.filter((utxo) => utxo.value <= inputFee);
+      const skippedAmount = skipped.reduce((sum, utxo) => sum + utxo.value, 0);
+
+      if (utxos.length === 0) {
+        throw new Error(
+          `All ${allUtxos.length} outputs at this address are worth no more than ` +
+            `the ${inputFee} sats it costs to spend each one at ` +
+            `${formData.feeRate} sat/vB. Try a lower fee rate.`,
+        );
       }
 
       // 2. Calculate total amount from UTXOs
@@ -184,14 +207,16 @@ export const Form = () => {
       });
 
       // 5. Estimate transaction size (very rough estimate)
-      const estimatedTxSize = utxos.length * 150 + 34 + 10; // inputs + output + overhead
+      const estimatedTxSize = utxos.length * INPUT_VSIZE + 34 + 10; // inputs + output + overhead
 
       // 6. Calculate fee
       const fee = estimatedTxSize * formData.feeRate;
 
-      // 7. Ensure fee is not more than total amount
-      if (fee >= totalAmount) {
-        throw new Error("Fee is higher than available funds");
+      // 7. Ensure the amount left after the fee can be relayed
+      if (totalAmount - fee < DUST_LIMIT) {
+        throw new Error(
+          `Not enough funds left after the ${fee} sat fee to send to your wallet`,
+        );
       }
 
       // 8. Calculate final amount after deducting fee
@@ -216,6 +241,16 @@ export const Form = () => {
         address: walletState.address,
         value: BigInt(finalAmount),
       });
+
+      // Tell the user about left-out outputs before they sign
+      if (skipped.length > 0) {
+        setSkippedNotice(
+          `${skipped.length} output(s) worth ${skippedAmount} sats in total ` +
+            `are left out of this recovery: spending them at ` +
+            `${formData.feeRate} sat/vB would cost at least as much as they ` +
+            `hold. You may be able to recover them later at a lower fee rate.`,
+        );
+      }
 
       // 10. Get the PSBT hex for signing
       const psbtHex = psbt.toHex();
@@ -371,6 +406,13 @@ export const Form = () => {
           </p>
         )}
       </form>
+
+      {/* Left-out outputs */}
+      {skippedNotice && (
+        <div className="mt-4 p-3 bg-yellow-100 text-yellow-800 rounded-md text-sm">
+          {skippedNotice}
+        </div>
+      )}
 
       {/* Error Message */}
       {error && (
