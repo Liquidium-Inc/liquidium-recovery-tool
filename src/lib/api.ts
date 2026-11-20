@@ -48,32 +48,37 @@ export async function broadcastTransaction(txHex: string): Promise<string> {
   // Work out the txid ourselves, so a wrong or garbled reply from the
   // broadcast service can't be shown as a successful recovery
   const txid = bitcoin.Transaction.fromHex(txHex).getId();
+  const checkFirst = `Check https://mempool.space/tx/${txid} before trying again.`;
+
+  let response: Response;
+  let body: string;
   try {
-    const response = await fetch(`${MEMPOOL_API_URL}/tx`, {
+    response = await fetch(`${MEMPOOL_API_URL}/tx`, {
       method: 'POST',
       headers: {
         'Content-Type': 'text/plain',
       },
       body: txHex,
     });
-
     // mempool.space answers with plain text: the txid, or the node's error
-    const body = (await response.text()).trim();
-
-    if (!response.ok) {
-      throw new Error(body || `Failed to broadcast transaction: ${response.statusText}`);
-    }
-
-    if (body !== txid) {
-      throw new Error(
-        `The broadcast service gave an unexpected reply, so the transaction may not have been sent. ` +
-          `Check https://mempool.space/tx/${txid} before trying again.`,
-      );
-    }
-
-    return txid;
+    body = (await response.text()).trim();
   } catch (error) {
+    // The request may have reached the service before the connection failed
     console.error('Error broadcasting transaction:', error);
-    throw error;
+    throw new Error(
+      `No reply from the broadcast service (${(error as Error).message}), so the transaction may or may not have been sent. ${checkFirst}`,
+    );
   }
+
+  if (!response.ok) {
+    throw new Error(body || `Failed to broadcast transaction: ${response.statusText}`);
+  }
+
+  if (body !== txid) {
+    throw new Error(
+      `The broadcast service gave an unexpected reply, so the transaction may not have been sent. ${checkFirst}`,
+    );
+  }
+
+  return txid;
 }
