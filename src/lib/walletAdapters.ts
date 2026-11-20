@@ -405,13 +405,13 @@ class MagicEdenAdapter extends BaseWalletAdapter {
               type: BitcoinNetworkType.Mainnet,
             },
             message: "Sign transaction to sweep multisig funds",
-            psbtBase64: psbtHex,
+            psbtBase64: Buffer.from(psbtHex, "hex").toString("base64"),
             broadcast: false,
             inputsToSign: inputsToSignME,
           },
           getProvider: async () => provider,
           onFinish: (response) => {
-            resolve(response.psbtBase64);
+            resolve(Buffer.from(response.psbtBase64, "base64").toString("hex"));
           },
           onCancel: () => {
             reject(new Error("Cancelled the sign transaction request"));
