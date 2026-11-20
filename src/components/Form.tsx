@@ -209,11 +209,8 @@ export const Form = () => {
         const rawTx = signedPsbt.extractTransaction().toHex();
         console.log("Raw PBST Transaction:", rawTx);
 
-        // 15. Broadcast the transaction
-        const response = await broadcastTransaction(rawTx);
-
-        // 16. Set the transaction ID
-        setTransactionId(response.txid);
+        // 15. Broadcast the transaction and show its verified ID
+        setTransactionId(await broadcastTransaction(rawTx));
       } catch (signError) {
         console.error("Error during PSBT signing or processing:", signError);
         throw signError; // Re-throw to be caught by the outer try/catch
