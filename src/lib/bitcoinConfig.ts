@@ -34,5 +34,22 @@ export const isValidPublicKey = (publicKey: string): boolean => {
   }
 };
 
+// Whether the address is one of the standard single-key addresses
+// (P2WPKH, P2SH-P2WPKH, P2PKH or key-path P2TR) of this compressed public key
+export const addressMatchesPublicKey = (address: string, publicKey: string): boolean => {
+  try {
+    const pubkey = Buffer.from(publicKey, 'hex');
+    const p2wpkh = bitcoin.payments.p2wpkh({ pubkey, network: NETWORK });
+    return [
+      p2wpkh.address,
+      bitcoin.payments.p2sh({ redeem: p2wpkh, network: NETWORK }).address,
+      bitcoin.payments.p2pkh({ pubkey, network: NETWORK }).address,
+      bitcoin.payments.p2tr({ internalPubkey: pubkey.subarray(1, 33), network: NETWORK }).address,
+    ].includes(address);
+  } catch (error) {
+    return false;
+  }
+};
+
 // Export bitcoinjs-lib for use in other files
 export { bitcoin }; 

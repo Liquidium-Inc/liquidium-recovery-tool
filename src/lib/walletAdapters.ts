@@ -11,7 +11,7 @@ import {
 } from "sats-connect";
 import { getWallets } from "@wallet-standard/core";
 import { WalletType } from "./types";
-import { bitcoin } from "./bitcoinConfig";
+import { addressMatchesPublicKey, bitcoin } from "./bitcoinConfig";
 import { Buffer } from "buffer";
 
 declare global {
@@ -67,7 +67,7 @@ export function createWalletAdapter(walletType: WalletType): BaseWalletAdapter {
       return new MagicEdenAdapter();
     case WalletType.PHANTOM:
       return new PhantomAdapter();
-    // TODO: Wizz is not tested
+    // TODO: Wizz is not tested with the real extension
     case WalletType.WIZZ:
       return new WizzAdapter();
     default:
@@ -538,7 +538,8 @@ class PhantomAdapter extends BaseWalletAdapter {
   }
 }
 
-// Implementation for Wizz wallet
+// Implementation for Wizz wallet (UniSat-style API on window.wizz:
+// https://docs.wizz.cash/wizz-wallet/dev/wallet-api)
 class WizzAdapter extends BaseWalletAdapter {
   protected address: string = "";
   protected publicKey: string = "";
@@ -551,13 +552,21 @@ class WizzAdapter extends BaseWalletAdapter {
         throw new Error("Wizz wallet not found");
       }
 
-      const accounts = await wizz.bitcoin.requestAccounts();
+      const accounts = await wizz.requestAccounts();
       if (!accounts?.[0]) {
         throw new Error("No address returned from Wizz wallet");
       }
 
+      const publicKey = await wizz.getPublicKey();
+      // Address and key come from separate calls; make sure both belong to the same account
+      if (!addressMatchesPublicKey(accounts[0], publicKey)) {
+        throw new Error("Wizz returned a public key that does not match the connected address");
+      }
+
       this.address = accounts[0];
-      return { address: accounts[0], publicKey: this.publicKey };
+      this.publicKey = publicKey;
+
+      return { address: this.address, publicKey: this.publicKey };
     } catch (error) {
       console.error("Error connecting to Wizz wallet:", error);
       throw error;
@@ -569,7 +578,7 @@ class WizzAdapter extends BaseWalletAdapter {
     inputsToSign: number[],
   ): Promise<string> {
     try {
-      if (!this.address) {
+      if (!this.publicKey) {
         throw new Error("Wallet not connected");
       }
 
@@ -579,18 +588,15 @@ class WizzAdapter extends BaseWalletAdapter {
         throw new Error("Wizz wallet not found");
       }
 
-      // Format inputs for Wizz
-      const signOptions = {
-        psbt: psbtHex,
-        inputsToSign: inputsToSign.map((index) => ({
+      // Sign the vault inputs with the key that is in the multisig script
+      return await wizz.signPsbt(psbtHex, {
+        autoFinalized: false,
+        toSignInputs: inputsToSign.map((index) => ({
           index,
-          address: this.address,
-          sighashType: 1, // SIGHASH_ALL
+          publicKey: this.publicKey,
+          sighashTypes: [1], // SIGHASH_ALL
         })),
-      };
-
-      const signedPsbtHex = await wizz.bitcoin.signPsbt(signOptions);
-      return signedPsbtHex;
+      });
     } catch (error) {
       console.error("Error signing PSBT with Wizz wallet:", error);
       throw error;
