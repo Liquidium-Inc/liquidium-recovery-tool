@@ -43,7 +43,8 @@ This tool is open-source—fork it, tweak it, or run it yourself! Here’s a beg
 
 ### Step 1: Prerequisites
 - **A Computer**: Works on Windows, Mac, or Linux.
-- **Node.js**: Download the LTS version (e.g., 18+) from [nodejs.org](https://nodejs.org/) and install it. This includes `npm` for managing project files.
+- **Node.js**: Download the LTS version (20 or newer) from [nodejs.org](https://nodejs.org/) and install it.
+- **pnpm**: After installing Node.js, run `npm install -g pnpm@10` once. The project uses pnpm, because its lockfile pins the exact dependency versions that npm would ignore.
 
 ### Step 2: Fork the Repository
 1. **Join GitHub**: Sign up at [github.com](https://github.com) if you haven’t.
@@ -68,13 +69,13 @@ This tool is open-source—fork it, tweak it, or run it yourself! Here’s a beg
 2. **Navigate to the Folder**:
    - Example: `cd Desktop/liquidium-recovery-tool-main` (adjust path as needed).
 3. **Install Dependencies**:
-   - Run `npm install` and wait for it to finish downloading required files.
+   - Run `pnpm install --frozen-lockfile` and wait for it to finish downloading required files.
 
 ### Step 5: Run the Tool Locally
 1. **Launch It**:
-   - Run `npm run dev`—you’ll see “Ready on http://localhost:3001” when it starts.
+   - Run `pnpm dev`. When it starts, it shows the local address, usually `http://localhost:5173`.
 2. **Open in Browser**:
-   - Visit `http://localhost:3001` in Chrome, Firefox, etc., to use the tool.
+   - Visit that address (e.g., `http://localhost:5173`) in Chrome, Firefox, etc., to use the tool.
 
 ### Stopping the Tool
 - Press `Ctrl + C` in the terminal to shut it down.
@@ -91,7 +92,7 @@ This tool is open-source—fork it, tweak it, or run it yourself! Here’s a beg
 ## Troubleshooting
 - **Node.js Issues**: Confirm installation with `node -v`.
 - **Wallet Connection Fails**: Ensure your wallet extension is installed and unlocked.
-- **Install Errors**: Retry `npm install` or check your network.
+- **Install Errors**: Retry `pnpm install --frozen-lockfile` or check your network.
 
 ## Project Structure
 - `/src/app`: Core web pages
